@@ -1,7 +1,7 @@
 (function() {
     'use strict';
 
-    // --- LIMPEZA ---
+    // --- LIMPEZA INICIAL ---
     const existingContainer = document.getElementById('social-buttons-container');
     if (existingContainer) {
         existingContainer.remove();
@@ -33,20 +33,18 @@
     ];
 
     const MOBILE_BREAKPOINT = 768;
-    const TIME_TO_SHOW_AFTER_STOP = 3000; // 3 segundos parado
+    const TIME_TO_SHOW_AFTER_STOP = 3000;
     
-    // Variáveis de controle de scroll
     let lastScrollTop = 0;
     let isScrollingTimer = null;
     let isHidden = false;
 
-    // --- ELEMENTOS ---
+    // --- ELEMENTOS SOCIAIS ---
 
     function createSocialButtonsContainer() {
         const container = document.createElement('div');
         container.id = 'social-buttons-container';
 
-        // Mantive transparente como combinamos para evitar a "borda fantasma"
         container.style.cssText = `
             position: fixed;
             left: 0;
@@ -56,11 +54,10 @@
             display: flex;
             flex-direction: column;
             gap: 0;
-            transition: transform 0.4s ease; /* Animação suave */
+            transition: transform 0.4s ease;
             background: transparent;
             width: fit-content;
         `;
-        
         return container;
     }
 
@@ -71,7 +68,6 @@
         button.rel = 'noopener noreferrer';
         button.title = buttonConfig.name;
 
-        // Borda arredondada no topo e base
         let borderRadius = '0';
         if (index === 0) borderRadius = '0 8px 0 0';
         if (index === total - 1) borderRadius = '0 0 8px 0';
@@ -93,10 +89,8 @@
             box-shadow: 2px 2px 5px rgba(0,0,0,0.2); 
             position: relative;
         `;
-
         button.innerHTML = buttonConfig.icon;
 
-        // Hover apenas no Desktop
         button.addEventListener('mouseenter', function() {
             if (window.innerWidth > MOBILE_BREAKPOINT) {
                 this.style.backgroundColor = buttonConfig.hoverColor;
@@ -116,63 +110,92 @@
         return button;
     }
 
-    // --- LÓGICA DE SCROLL (NOVA) ---
+    // --- FUNÇÕES AUXILIARES PARA VLIBRAS ---
+    // O VLibras geralmente usa a classe .vw-plugin-wrapper ou o atributo [vw]
+    function getVlibrasContainer() {
+        // Tenta achar o wrapper principal do VLibras
+        return document.querySelector('.vw-plugin-wrapper') || document.querySelector('[vw]');
+    }
+
+    // --- LÓGICA DE VISIBILIDADE (ESCONDER/MOSTRAR) ---
 
     function hide() {
-        const container = document.getElementById('social-buttons-container');
-        if (!container || isHidden) return;
-        
+        const socialContainer = document.getElementById('social-buttons-container');
+        const vlibrasContainer = getVlibrasContainer();
+
+        if (isHidden) return;
         isHidden = true;
-        // Esconde 100% para a esquerda
-        container.style.transform = 'translateY(-50%) translateX(-120%)';
+
+        // 1. Esconde Social (Vai pra Esquerda)
+        if (socialContainer) {
+            socialContainer.style.transform = 'translateY(-50%) translateX(-120%)';
+        }
+
+        // 2. Esconde VLibras (Vai pra Direita)
+        if (vlibrasContainer) {
+            // Garante a transição suave caso o VLibras não tenha por padrão
+            vlibrasContainer.style.transition = 'transform 0.4s ease'; 
+            // Move para fora da tela pela direita
+            vlibrasContainer.style.transform = 'translateX(150%)'; 
+        }
     }
 
     function show() {
-        const container = document.getElementById('social-buttons-container');
-        if (!container || !isHidden) return;
+        const socialContainer = document.getElementById('social-buttons-container');
+        const vlibrasContainer = getVlibrasContainer();
 
+        if (!isHidden) return;
         isHidden = false;
-        // Mostra normal
-        container.style.transform = 'translateY(-50%) translateX(0)';
+
+        // 1. Mostra Social
+        if (socialContainer) {
+            socialContainer.style.transform = 'translateY(-50%) translateX(0)';
+        }
+
+        // 2. Mostra VLibras
+        if (vlibrasContainer) {
+            vlibrasContainer.style.transition = 'transform 0.4s ease';
+            vlibrasContainer.style.transform = 'translateX(0)';
+        }
     }
 
+    // --- CONTROLE DE SCROLL ---
+
     function handleScroll() {
-        // Lógica só se aplica ao mobile
+        // Aplica a lógica apenas em Mobile (ou se quiser em tudo, remova o IF)
         if (window.innerWidth > MOBILE_BREAKPOINT) return;
 
         const st = window.pageYOffset || document.documentElement.scrollTop;
         
-        // Evita efeito "rubber band" do iOS (rolar além do topo)
-        if (st < 0) return;
+        if (st < 0) return; // Evita bug no iOS
 
-        // Detecta direção
         if (st > lastScrollTop) {
-            // ROLANDO PARA BAIXO -> Esconde
+            // Rolando para BAIXO -> ESCONDE TUDO
             hide();
         } else {
-            // ROLANDO PARA CIMA -> Mostra
+            // Rolando para CIMA -> MOSTRA TUDO
             show();
         }
         
         lastScrollTop = st;
 
-        // Detecta quando PAROU de rolar
+        // Timer para mostrar quando para de rolar
         if (isScrollingTimer) clearTimeout(isScrollingTimer);
         
         isScrollingTimer = setTimeout(() => {
-            // Se parou por 3 segundos, mostra (se já não estiver visível)
             show();
         }, TIME_TO_SHOW_AFTER_STOP);
     }
 
     function handleResize() {
-        const container = document.getElementById('social-buttons-container');
-        
-        // Se voltou para desktop, garante que está visível
+        // Se a tela for grande (Desktop), garante que tudo esteja visível
         if (window.innerWidth > MOBILE_BREAKPOINT) {
-            if (container) {
-                container.style.transform = 'translateY(-50%) translateX(0)';
-            }
+            const socialContainer = document.getElementById('social-buttons-container');
+            const vlibrasContainer = getVlibrasContainer();
+            
+            if (socialContainer) socialContainer.style.transform = 'translateY(-50%) translateX(0)';
+            if (vlibrasContainer) vlibrasContainer.style.transform = 'translateX(0)';
+            
             isHidden = false;
         }
     }
@@ -189,9 +212,8 @@
 
         document.body.appendChild(container);
 
-        // Listeners
         window.addEventListener('resize', handleResize);
-        window.addEventListener('scroll', handleScroll, { passive: true }); // passive melhora performance
+        window.addEventListener('scroll', handleScroll, { passive: true });
         
         handleResize();
     }
