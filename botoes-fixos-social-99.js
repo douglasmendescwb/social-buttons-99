@@ -1,7 +1,7 @@
 (function() {
     'use strict';
 
-    // --- LIMPEZA DE VERSÕES ANTERIORES ---
+    // --- LIMPEZA ---
     const existingContainer = document.getElementById('social-buttons-container');
     if (existingContainer) {
         existingContainer.remove();
@@ -33,12 +33,12 @@
     ];
 
     const MOBILE_BREAKPOINT = 768;
-    const TIME_VISIBLE = 4000;
-    const TIME_HIDDEN = 20000;
-    const HANDLE_SIZE = 15; // Aumentei um pouco a área de toque
+    const TIME_TO_SHOW_AFTER_STOP = 3000; // 3 segundos parado
     
-    let mobileAnimationTimer = null;
-    let isHiddenMode = false; // Variável de controle de estado
+    // Variáveis de controle de scroll
+    let lastScrollTop = 0;
+    let isScrollingTimer = null;
+    let isHidden = false;
 
     // --- ELEMENTOS ---
 
@@ -46,8 +46,7 @@
         const container = document.createElement('div');
         container.id = 'social-buttons-container';
 
-        // VISUAL FIX: Fundo transparente e sem sombra no container.
-        // A sombra agora irá para os botões individuais.
+        // Mantive transparente como combinamos para evitar a "borda fantasma"
         container.style.cssText = `
             position: fixed;
             left: 0;
@@ -57,19 +56,11 @@
             display: flex;
             flex-direction: column;
             gap: 0;
-            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
-            background: transparent; /* Importante para não ter borda branca */
+            transition: transform 0.4s ease; /* Animação suave */
+            background: transparent;
             width: fit-content;
         `;
         
-        // Clique no container vazio (caso exista área morta) também abre
-        container.addEventListener('click', function(e) {
-            if (window.innerWidth <= MOBILE_BREAKPOINT && isHiddenMode) {
-                if(mobileAnimationTimer) clearTimeout(mobileAnimationTimer);
-                show();
-            }
-        });
-
         return container;
     }
 
@@ -80,10 +71,10 @@
         button.rel = 'noopener noreferrer';
         button.title = buttonConfig.name;
 
-        // Borda arredondada só no primeiro e no último
+        // Borda arredondada no topo e base
         let borderRadius = '0';
-        if (index === 0) borderRadius = '0 8px 0 0'; // Topo direito
-        if (index === total - 1) borderRadius = '0 0 8px 0'; // Fundo direito
+        if (index === 0) borderRadius = '0 8px 0 0';
+        if (index === total - 1) borderRadius = '0 0 8px 0';
 
         button.style.cssText = `
             display: flex;
@@ -99,35 +90,19 @@
             cursor: pointer;
             box-sizing: border-box;
             border-radius: ${borderRadius};
-            /* VISUAL FIX: Sombra no botão, garantindo que apareça sobre o conteúdo do site */
             box-shadow: 2px 2px 5px rgba(0,0,0,0.2); 
-            position: relative; /* Para o z-index funcionar no hover */
+            position: relative;
         `;
 
         button.innerHTML = buttonConfig.icon;
 
-        // --- CORREÇÃO DO CLIQUE MOBILE ---
-        button.addEventListener('click', function(e) {
-            // Se for mobile E estiver escondido (apenas a bordinha aparecendo)
-            if (window.innerWidth <= MOBILE_BREAKPOINT && isHiddenMode) {
-                e.preventDefault(); // CANCELA o link
-                e.stopPropagation(); // Impede borbulhar
-                
-                // Apenas abre o menu
-                if(mobileAnimationTimer) clearTimeout(mobileAnimationTimer);
-                show();
-                return false;
-            }
-            // Se estiver aberto, deixa o link funcionar normalmente
-        });
-
-        // Hover Desktop
+        // Hover apenas no Desktop
         button.addEventListener('mouseenter', function() {
             if (window.innerWidth > MOBILE_BREAKPOINT) {
                 this.style.backgroundColor = buttonConfig.hoverColor;
-                this.style.width = '65px'; // Cresce só o botão
+                this.style.width = '65px';
                 this.style.paddingLeft = '15px';
-                this.style.zIndex = '10'; // Garante que a sombra fique sobre o botão de baixo
+                this.style.zIndex = '10';
             }
         });
 
@@ -141,53 +116,64 @@
         return button;
     }
 
-    // --- LÓGICA MOBILE ---
+    // --- LÓGICA DE SCROLL (NOVA) ---
 
     function hide() {
         const container = document.getElementById('social-buttons-container');
-        if (!container || window.innerWidth > MOBILE_BREAKPOINT) return;
+        if (!container || isHidden) return;
         
-        // Marca que está escondido
-        isHiddenMode = true;
-
-        // Esconde deixando apenas a beirada
-        container.style.transform = `translateY(-50%) translateX(calc(-100% + ${HANDLE_SIZE}px))`;
-        container.style.opacity = '0.9'; // Leve transparência
-        
-        // Reaparece sozinho depois de um tempo
-        mobileAnimationTimer = setTimeout(show, TIME_HIDDEN);
+        isHidden = true;
+        // Esconde 100% para a esquerda
+        container.style.transform = 'translateY(-50%) translateX(-120%)';
     }
 
     function show() {
         const container = document.getElementById('social-buttons-container');
-        if (!container) return;
+        if (!container || !isHidden) return;
 
-        // Marca que está visível
-        isHiddenMode = false;
-
+        isHidden = false;
+        // Mostra normal
         container.style.transform = 'translateY(-50%) translateX(0)';
-        container.style.opacity = '1';
+    }
 
-        // Agenda para esconder
-        mobileAnimationTimer = setTimeout(hide, TIME_VISIBLE);
+    function handleScroll() {
+        // Lógica só se aplica ao mobile
+        if (window.innerWidth > MOBILE_BREAKPOINT) return;
+
+        const st = window.pageYOffset || document.documentElement.scrollTop;
+        
+        // Evita efeito "rubber band" do iOS (rolar além do topo)
+        if (st < 0) return;
+
+        // Detecta direção
+        if (st > lastScrollTop) {
+            // ROLANDO PARA BAIXO -> Esconde
+            hide();
+        } else {
+            // ROLANDO PARA CIMA -> Mostra
+            show();
+        }
+        
+        lastScrollTop = st;
+
+        // Detecta quando PAROU de rolar
+        if (isScrollingTimer) clearTimeout(isScrollingTimer);
+        
+        isScrollingTimer = setTimeout(() => {
+            // Se parou por 3 segundos, mostra (se já não estiver visível)
+            show();
+        }, TIME_TO_SHOW_AFTER_STOP);
     }
 
     function handleResize() {
         const container = document.getElementById('social-buttons-container');
         
-        if (window.innerWidth <= MOBILE_BREAKPOINT) {
-            // Entrou no modo mobile
-            if (!isHiddenMode) { // Se ainda não iniciou o ciclo
-                show(); // Começa mostrando
-            }
-        } else {
-            // Modo Desktop
-            if (mobileAnimationTimer) clearTimeout(mobileAnimationTimer);
-            isHiddenMode = false;
+        // Se voltou para desktop, garante que está visível
+        if (window.innerWidth > MOBILE_BREAKPOINT) {
             if (container) {
                 container.style.transform = 'translateY(-50%) translateX(0)';
-                container.style.opacity = '1';
             }
+            isHidden = false;
         }
     }
 
@@ -197,14 +183,16 @@
         const container = createSocialButtonsContainer();
         
         socialButtons.forEach((buttonConfig, index) => {
-            // Passamos index e total para calcular bordas arredondadas
             const button = createSocialButton(buttonConfig, index, socialButtons.length);
             container.appendChild(button);
         });
 
         document.body.appendChild(container);
 
+        // Listeners
         window.addEventListener('resize', handleResize);
+        window.addEventListener('scroll', handleScroll, { passive: true }); // passive melhora performance
+        
         handleResize();
     }
 
