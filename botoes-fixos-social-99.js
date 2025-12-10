@@ -59,7 +59,7 @@
             flex-direction: column;
             gap: 0;
             transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease; /* Animação mais suave */
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.25);
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.0);
             border-top-right-radius: 6px;
             border-bottom-right-radius: 6px;
             overflow: hidden;
@@ -213,3 +213,4 @@
     }
 
 })();
+
