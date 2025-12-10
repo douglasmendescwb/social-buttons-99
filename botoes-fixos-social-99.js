@@ -1,14 +1,13 @@
 (function() {
     'use strict';
 
-    // --- SEGURANÇA E LIMPEZA ---
+    // --- LIMPEZA DE VERSÕES ANTERIORES ---
     const existingContainer = document.getElementById('social-buttons-container');
     if (existingContainer) {
         existingContainer.remove();
     }
 
     // --- CONFIGURAÇÕES ---
-
     const socialButtons = [
         {
             name: 'Instagram',
@@ -33,22 +32,22 @@
         }
     ];
 
-    // Configuração Mobile
     const MOBILE_BREAKPOINT = 768;
     const TIME_VISIBLE = 4000;
     const TIME_HIDDEN = 20000;
-    // Largura da "alça" visível quando escondido (em pixels)
-    const HANDLE_SIZE = 12; 
+    const HANDLE_SIZE = 15; // Aumentei um pouco a área de toque
     
     let mobileAnimationTimer = null;
-    let isMobileLoopRunning = false;
+    let isHiddenMode = false; // Variável de controle de estado
 
-    // --- CRIAÇÃO DOS ELEMENTOS ---
+    // --- ELEMENTOS ---
 
     function createSocialButtonsContainer() {
         const container = document.createElement('div');
         container.id = 'social-buttons-container';
 
+        // VISUAL FIX: Fundo transparente e sem sombra no container.
+        // A sombra agora irá para os botões individuais.
         container.style.cssText = `
             position: fixed;
             left: 0;
@@ -58,19 +57,14 @@
             display: flex;
             flex-direction: column;
             gap: 0;
-            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease; /* Animação mais suave */
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.0);
-            border-top-right-radius: 6px;
-            border-bottom-right-radius: 6px;
-            overflow: hidden;
-            cursor: pointer; /* Indica que é clicável */
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
+            background: transparent; /* Importante para não ter borda branca */
+            width: fit-content;
         `;
         
-        // Adiciona evento para abrir ao tocar na alça
+        // Clique no container vazio (caso exista área morta) também abre
         container.addEventListener('click', function(e) {
-            // Se estiver rodando o loop mobile e o usuário clicar, força mostrar
-            if (isMobileLoopRunning) {
-                // Limpa timer anterior e mostra
+            if (window.innerWidth <= MOBILE_BREAKPOINT && isHiddenMode) {
                 if(mobileAnimationTimer) clearTimeout(mobileAnimationTimer);
                 show();
             }
@@ -79,17 +73,17 @@
         return container;
     }
 
-    function createSocialButton(buttonConfig) {
+    function createSocialButton(buttonConfig, index, total) {
         const button = document.createElement('a');
         button.href = buttonConfig.url;
         button.target = '_blank';
         button.rel = 'noopener noreferrer';
         button.title = buttonConfig.name;
 
-        // stopPropagation evita que clicar no link acione o evento do container (opcional, mas bom pra evitar conflitos)
-        button.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
+        // Borda arredondada só no primeiro e no último
+        let borderRadius = '0';
+        if (index === 0) borderRadius = '0 8px 0 0'; // Topo direito
+        if (index === total - 1) borderRadius = '0 0 8px 0'; // Fundo direito
 
         button.style.cssText = `
             display: flex;
@@ -100,19 +94,40 @@
             background-color: ${buttonConfig.color};
             color: white;
             text-decoration: none;
-            transition: all 0.2s ease;
+            transition: width 0.2s ease, background-color 0.2s ease;
             border: none;
             cursor: pointer;
             box-sizing: border-box;
+            border-radius: ${borderRadius};
+            /* VISUAL FIX: Sombra no botão, garantindo que apareça sobre o conteúdo do site */
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2); 
+            position: relative; /* Para o z-index funcionar no hover */
         `;
 
         button.innerHTML = buttonConfig.icon;
 
+        // --- CORREÇÃO DO CLIQUE MOBILE ---
+        button.addEventListener('click', function(e) {
+            // Se for mobile E estiver escondido (apenas a bordinha aparecendo)
+            if (window.innerWidth <= MOBILE_BREAKPOINT && isHiddenMode) {
+                e.preventDefault(); // CANCELA o link
+                e.stopPropagation(); // Impede borbulhar
+                
+                // Apenas abre o menu
+                if(mobileAnimationTimer) clearTimeout(mobileAnimationTimer);
+                show();
+                return false;
+            }
+            // Se estiver aberto, deixa o link funcionar normalmente
+        });
+
+        // Hover Desktop
         button.addEventListener('mouseenter', function() {
             if (window.innerWidth > MOBILE_BREAKPOINT) {
                 this.style.backgroundColor = buttonConfig.hoverColor;
-                this.style.width = '60px';
-                this.style.paddingLeft = '10px';
+                this.style.width = '65px'; // Cresce só o botão
+                this.style.paddingLeft = '15px';
+                this.style.zIndex = '10'; // Garante que a sombra fique sobre o botão de baixo
             }
         });
 
@@ -120,6 +135,7 @@
             this.style.backgroundColor = buttonConfig.color;
             this.style.width = '50px';
             this.style.paddingLeft = '0';
+            this.style.zIndex = '1';
         });
 
         return button;
@@ -127,83 +143,69 @@
 
     // --- LÓGICA MOBILE ---
 
-    // Funções separadas para facilitar o controle
     function hide() {
         const container = document.getElementById('social-buttons-container');
-        if (!container || window.innerWidth > MOBILE_BREAKPOINT) {
-            stopMobileLoop();
-            return;
-        }
+        if (!container || window.innerWidth > MOBILE_BREAKPOINT) return;
         
-        // A MÁGICA: Esconde 100% mas soma 12px para deixar a borda visível
+        // Marca que está escondido
+        isHiddenMode = true;
+
+        // Esconde deixando apenas a beirada
         container.style.transform = `translateY(-50%) translateX(calc(-100% + ${HANDLE_SIZE}px))`;
-        // Diminui levemente a opacidade quando escondido para não chamar tanta atenção
-        container.style.opacity = '0.8';
+        container.style.opacity = '0.9'; // Leve transparência
         
-        // Agenda a próxima aparição automática (opcional, se quiser que ela fique escondida até clicar, remova a linha abaixo)
-        // mobileAnimationTimer = setTimeout(show, TIME_HIDDEN); 
-        // OBS: Mantive comentado acima. Se o usuário quiser ver, ele clica na alça. 
-        // Mas se quiser que ela volte sozinha depois de 20s, descomente a linha acima.
-        // Vou deixar ela reaparecer sozinha para garantir visibilidade, conforme lógica original:
+        // Reaparece sozinho depois de um tempo
         mobileAnimationTimer = setTimeout(show, TIME_HIDDEN);
     }
 
     function show() {
         const container = document.getElementById('social-buttons-container');
-        if (!container || window.innerWidth > MOBILE_BREAKPOINT) {
-            stopMobileLoop();
-            return;
-        }
+        if (!container) return;
 
-        // Mostra totalmente
+        // Marca que está visível
+        isHiddenMode = false;
+
         container.style.transform = 'translateY(-50%) translateX(0)';
         container.style.opacity = '1';
 
-        // Agenda o desaparecimento
+        // Agenda para esconder
         mobileAnimationTimer = setTimeout(hide, TIME_VISIBLE);
     }
 
-    function startMobileLoop() {
-        if (isMobileLoopRunning) return;
-        isMobileLoopRunning = true;
-        
-        // Começa mostrando
-        show();
-    }
-
-    function stopMobileLoop() {
-        isMobileLoopRunning = false;
-        if (mobileAnimationTimer) clearTimeout(mobileAnimationTimer);
-        
-        const container = document.getElementById('social-buttons-container');
-        if(container) {
-            container.style.transform = 'translateY(-50%) translateX(0)';
-            container.style.opacity = '1';
-        }
-    }
-
     function handleResize() {
+        const container = document.getElementById('social-buttons-container');
+        
         if (window.innerWidth <= MOBILE_BREAKPOINT) {
-            startMobileLoop();
+            // Entrou no modo mobile
+            if (!isHiddenMode) { // Se ainda não iniciou o ciclo
+                show(); // Começa mostrando
+            }
         } else {
-            stopMobileLoop();
+            // Modo Desktop
+            if (mobileAnimationTimer) clearTimeout(mobileAnimationTimer);
+            isHiddenMode = false;
+            if (container) {
+                container.style.transform = 'translateY(-50%) translateX(0)';
+                container.style.opacity = '1';
+            }
         }
     }
 
-    // --- EXECUÇÃO ---
+    // --- INICIALIZAÇÃO ---
 
     function initSocialButtons() {
         const container = createSocialButtonsContainer();
         
-        socialButtons.forEach(buttonConfig => {
-            const button = createSocialButton(buttonConfig);
+        socialButtons.forEach((buttonConfig, index) => {
+            // Passamos index e total para calcular bordas arredondadas
+            const button = createSocialButton(buttonConfig, index, socialButtons.length);
             container.appendChild(button);
         });
 
         document.body.appendChild(container);
 
         window.addEventListener('resize', handleResize);
-        handleResize(); 
+        handleResize();
     }
 
     if (document.readyState === 'loading') {
@@ -213,4 +215,3 @@
     }
 
 })();
-
