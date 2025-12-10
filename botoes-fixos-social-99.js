@@ -1,9 +1,7 @@
 (function() {
     'use strict';
 
-    // --- SEGURANÇA E LIMPEZA INICIAL ---
-    // Remove qualquer versão anterior do container para garantir que as alterações (cores/lógica) sejam aplicadas.
-    // Isso resolve o problema do código parecer "inalterado".
+    // --- SEGURANÇA E LIMPEZA ---
     const existingContainer = document.getElementById('social-buttons-container');
     if (existingContainer) {
         existingContainer.remove();
@@ -15,9 +13,8 @@
         {
             name: 'Instagram',
             url: 'https://www.instagram.com/prefeiturasjp/',
-            color: '#F5335D', // Cor ajustada conforme solicitado
+            color: '#F5335D',
             hoverColor: '#d92c50',
-            // SVG sanitizado e fixo
             icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>`
         },
         {
@@ -38,8 +35,11 @@
 
     // Configuração Mobile
     const MOBILE_BREAKPOINT = 768;
-    const TIME_VISIBLE = 4000;      // 4 segundos visível
-    const TIME_HIDDEN = 20000;      // 20 segundos escondido
+    const TIME_VISIBLE = 4000;
+    const TIME_HIDDEN = 20000;
+    // Largura da "alça" visível quando escondido (em pixels)
+    const HANDLE_SIZE = 12; 
+    
     let mobileAnimationTimer = null;
     let isMobileLoopRunning = false;
 
@@ -49,7 +49,6 @@
         const container = document.createElement('div');
         container.id = 'social-buttons-container';
 
-        // CSS inline seguro
         container.style.cssText = `
             position: fixed;
             left: 0;
@@ -59,12 +58,23 @@
             display: flex;
             flex-direction: column;
             gap: 0;
-            transition: transform 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); /* Animação suave */
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
-            border-top-right-radius: 4px;
-            border-bottom-right-radius: 4px;
-            overflow: hidden; /* Garante que nada vaze */
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease; /* Animação mais suave */
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.25);
+            border-top-right-radius: 6px;
+            border-bottom-right-radius: 6px;
+            overflow: hidden;
+            cursor: pointer; /* Indica que é clicável */
         `;
+        
+        // Adiciona evento para abrir ao tocar na alça
+        container.addEventListener('click', function(e) {
+            // Se estiver rodando o loop mobile e o usuário clicar, força mostrar
+            if (isMobileLoopRunning) {
+                // Limpa timer anterior e mostra
+                if(mobileAnimationTimer) clearTimeout(mobileAnimationTimer);
+                show();
+            }
+        });
 
         return container;
     }
@@ -73,9 +83,13 @@
         const button = document.createElement('a');
         button.href = buttonConfig.url;
         button.target = '_blank';
-        // SEGURANÇA CRÍTICA: previne "Reverse Tabnabbing"
         button.rel = 'noopener noreferrer';
         button.title = buttonConfig.name;
+
+        // stopPropagation evita que clicar no link acione o evento do container (opcional, mas bom pra evitar conflitos)
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
 
         button.style.cssText = `
             display: flex;
@@ -94,9 +108,7 @@
 
         button.innerHTML = buttonConfig.icon;
 
-        // Hover Desktop
         button.addEventListener('mouseenter', function() {
-            // Só aplica efeito hover se não estiver no meio da animação de esconder do mobile
             if (window.innerWidth > MOBILE_BREAKPOINT) {
                 this.style.backgroundColor = buttonConfig.hoverColor;
                 this.style.width = '60px';
@@ -115,39 +127,48 @@
 
     // --- LÓGICA MOBILE ---
 
+    // Funções separadas para facilitar o controle
+    function hide() {
+        const container = document.getElementById('social-buttons-container');
+        if (!container || window.innerWidth > MOBILE_BREAKPOINT) {
+            stopMobileLoop();
+            return;
+        }
+        
+        // A MÁGICA: Esconde 100% mas soma 12px para deixar a borda visível
+        container.style.transform = `translateY(-50%) translateX(calc(-100% + ${HANDLE_SIZE}px))`;
+        // Diminui levemente a opacidade quando escondido para não chamar tanta atenção
+        container.style.opacity = '0.8';
+        
+        // Agenda a próxima aparição automática (opcional, se quiser que ela fique escondida até clicar, remova a linha abaixo)
+        // mobileAnimationTimer = setTimeout(show, TIME_HIDDEN); 
+        // OBS: Mantive comentado acima. Se o usuário quiser ver, ele clica na alça. 
+        // Mas se quiser que ela volte sozinha depois de 20s, descomente a linha acima.
+        // Vou deixar ela reaparecer sozinha para garantir visibilidade, conforme lógica original:
+        mobileAnimationTimer = setTimeout(show, TIME_HIDDEN);
+    }
+
+    function show() {
+        const container = document.getElementById('social-buttons-container');
+        if (!container || window.innerWidth > MOBILE_BREAKPOINT) {
+            stopMobileLoop();
+            return;
+        }
+
+        // Mostra totalmente
+        container.style.transform = 'translateY(-50%) translateX(0)';
+        container.style.opacity = '1';
+
+        // Agenda o desaparecimento
+        mobileAnimationTimer = setTimeout(hide, TIME_VISIBLE);
+    }
+
     function startMobileLoop() {
         if (isMobileLoopRunning) return;
         isMobileLoopRunning = true;
-        const container = document.getElementById('social-buttons-container');
         
-        // Garante estado inicial visível
-        if(container) container.style.transform = 'translateY(-50%) translateX(0)';
-
-        function hide() {
-            if (window.innerWidth > MOBILE_BREAKPOINT || !container) {
-                stopMobileLoop();
-                return;
-            }
-            // Esconde
-            container.style.transform = 'translateY(-50%) translateX(-100%)';
-            // Agenda reaparecimento
-            mobileAnimationTimer = setTimeout(show, TIME_HIDDEN);
-        }
-
-        function show() {
-             if (window.innerWidth > MOBILE_BREAKPOINT || !container) {
-                stopMobileLoop();
-                return;
-            }
-            // Mostra
-            container.style.transform = 'translateY(-50%) translateX(0)';
-            // Agenda desaparecimento
-            mobileAnimationTimer = setTimeout(hide, TIME_VISIBLE);
-        }
-
-        // Inicia ciclo de espera para esconder
-        if(mobileAnimationTimer) clearTimeout(mobileAnimationTimer);
-        mobileAnimationTimer = setTimeout(hide, TIME_VISIBLE);
+        // Começa mostrando
+        show();
     }
 
     function stopMobileLoop() {
@@ -156,8 +177,8 @@
         
         const container = document.getElementById('social-buttons-container');
         if(container) {
-            // Restaura posição padrão (fixa na tela)
             container.style.transform = 'translateY(-50%) translateX(0)';
+            container.style.opacity = '1';
         }
     }
 
@@ -182,7 +203,7 @@
         document.body.appendChild(container);
 
         window.addEventListener('resize', handleResize);
-        handleResize(); // Checagem inicial
+        handleResize(); 
     }
 
     if (document.readyState === 'loading') {
