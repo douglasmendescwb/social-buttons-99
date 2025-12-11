@@ -32,6 +32,8 @@
         }
     ];
 
+    // Ajuste aqui se ainda ficar por cima de menus (Ex: menus costumam ser 1000+)
+    const DEFAULT_Z_INDEX = 100; 
     const MOBILE_BREAKPOINT = 768;
     const TIME_TO_SHOW_AFTER_STOP = 3000;
     
@@ -50,7 +52,7 @@
             left: 0;
             top: 50%;
             transform: translateY(-50%) translateX(0);
-            z-index: 9999;
+            z-index: ${DEFAULT_Z_INDEX}; /* Aplicando Z-Index menos agressivo */
             display: flex;
             flex-direction: column;
             gap: 0;
@@ -96,7 +98,8 @@
                 this.style.backgroundColor = buttonConfig.hoverColor;
                 this.style.width = '65px';
                 this.style.paddingLeft = '15px';
-                this.style.zIndex = '10';
+                // Apenas um pouco acima dos outros botões, mas dentro do container
+                this.style.zIndex = '10'; 
             }
         });
 
@@ -111,10 +114,17 @@
     }
 
     // --- FUNÇÕES AUXILIARES PARA VLIBRAS ---
-    // O VLibras geralmente usa a classe .vw-plugin-wrapper ou o atributo [vw]
     function getVlibrasContainer() {
-        // Tenta achar o wrapper principal do VLibras
         return document.querySelector('.vw-plugin-wrapper') || document.querySelector('[vw]');
+    }
+
+    // Função para forçar o Z-Index do VLibras
+    function fixVlibrasZIndex() {
+        const vlibrasContainer = getVlibrasContainer();
+        if (vlibrasContainer) {
+            // Usa setProperty com 'important' para tentar sobrescrever o CSS nativo do plugin
+            vlibrasContainer.style.setProperty('z-index', DEFAULT_Z_INDEX.toString(), 'important');
+        }
     }
 
     // --- LÓGICA DE VISIBILIDADE (ESCONDER/MOSTRAR) ---
@@ -133,9 +143,7 @@
 
         // 2. Esconde VLibras (Vai pra Direita)
         if (vlibrasContainer) {
-            // Garante a transição suave caso o VLibras não tenha por padrão
             vlibrasContainer.style.transition = 'transform 0.4s ease'; 
-            // Move para fora da tela pela direita
             vlibrasContainer.style.transform = 'translateX(150%)'; 
         }
     }
@@ -162,24 +170,20 @@
     // --- CONTROLE DE SCROLL ---
 
     function handleScroll() {
-        // Aplica a lógica apenas em Mobile (ou se quiser em tudo, remova o IF)
         if (window.innerWidth > MOBILE_BREAKPOINT) return;
 
         const st = window.pageYOffset || document.documentElement.scrollTop;
         
-        if (st < 0) return; // Evita bug no iOS
+        if (st < 0) return; 
 
         if (st > lastScrollTop) {
-            // Rolando para BAIXO -> ESCONDE TUDO
             hide();
         } else {
-            // Rolando para CIMA -> MOSTRA TUDO
             show();
         }
         
         lastScrollTop = st;
 
-        // Timer para mostrar quando para de rolar
         if (isScrollingTimer) clearTimeout(isScrollingTimer);
         
         isScrollingTimer = setTimeout(() => {
@@ -188,7 +192,10 @@
     }
 
     function handleResize() {
-        // Se a tela for grande (Desktop), garante que tudo esteja visível
+        // Aproveita o resize para garantir que o Z-Index do VLibras esteja correto
+        // (pois o VLibras pode carregar assincronamente depois do script)
+        fixVlibrasZIndex();
+
         if (window.innerWidth > MOBILE_BREAKPOINT) {
             const socialContainer = document.getElementById('social-buttons-container');
             const vlibrasContainer = getVlibrasContainer();
@@ -211,6 +218,14 @@
         });
 
         document.body.appendChild(container);
+
+        // Tenta corrigir o Z-Index do VLibras na inicialização
+        fixVlibrasZIndex();
+        
+        // E observa mudanças para garantir (caso o VLibras demore a carregar)
+        // Um pequeno intervalo de segurança
+        setTimeout(fixVlibrasZIndex, 1000);
+        setTimeout(fixVlibrasZIndex, 3000);
 
         window.addEventListener('resize', handleResize);
         window.addEventListener('scroll', handleScroll, { passive: true });
